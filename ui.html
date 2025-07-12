@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Video Scraper UI</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      background-color: #f0f2f5;
+    }
+    .container {
+      max-width: 1000px;
+      margin: auto;
+      padding: 2em;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    #search-form {
+      display: flex;
+      margin-bottom: 2em;
+      gap: 10px;
+      justify-content: center;
+    }
+    input[type="text"] {
+      width: 60%;
+      padding: 0.8em;
+      font-size: 1em;
+    }
+    button {
+      padding: 0.8em 1.2em;
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      font-weight: bold;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    .video-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+    }
+    .video-card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+      width: 300px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .video-card img {
+      width: 100%;
+      height: 160px;
+      object-fit: cover;
+    }
+    .video-info {
+      padding: 1em;
+    }
+    .video-info h3 {
+      margin: 0 0 0.5em 0;
+      font-size: 1.1em;
+    }
+    .video-info p {
+      margin: 0.2em 0;
+      font-size: 0.9em;
+      color: #555;
+    }
+    .download-btn {
+      margin-top: 1em;
+      text-align: center;
+    }
+    .download-btn a {
+      text-decoration: none;
+      color: #007BFF;
+      font-weight: bold;
+    }
+    .download-btn a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Video Scraper & Downloader</h1>
+    <form id="search-form">
+      <input type="text" id="search-input" placeholder="Enter search term (e.g., bhabhi)">
+      <button type="submit">Scrape Videos</button>
+      <button type="button" id="clear-storage">Clear Scraped Data</button>
+    </form>
+
+    <div id="video-section">
+      <h2 id="status-msg" style="text-align: center;">Enter a search term above to begin scraping.</h2>
+      <div class="video-list" id="video-list"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://127.0.0.1:8000';
+    const form = document.getElementById('search-form');
+    const input = document.getElementById('search-input');
+    const videoList = document.getElementById('video-list');
+    const statusMsg = document.getElementById('status-msg');
+    const clearButton = document.getElementById('clear-storage');
+
+    function createVideoCard(video) {
+      const card = document.createElement('div');
+      card.className = 'video-card';
+
+      const videoUrl = encodeURIComponent(video.download_url);
+      const refererUrl = encodeURIComponent(video.detail_page_url);
+      const title = encodeURIComponent(video.title);
+      const downloadHref = `${API_BASE}/download/video?video_url=${videoUrl}&referer_url=${refererUrl}&title=${title}`;
+
+      card.innerHTML = `
+        <img src="${video.thumbnail_url}" alt="${video.title}" onerror="this.onerror=null;this.src='/not-found.jpg';">
+        <div class="video-info">
+          <h3>${video.title}</h3>
+          <p><strong>Duration:</strong> ${video.duration}</p>
+          <p><strong>Quality:</strong> ${video.quality}</p>
+          <p><strong>Views:</strong> ${video.views}</p>
+          <p><strong>Uploader:</strong> ${video.uploader}</p>
+          <a href="${downloadHref}" class="download-btn" target="_blank">Download Video</a>
+        </div>
+      `;
+      return card;
+    }
+
+    function loadVideosFromStorage() {
+      const videoIds = JSON.parse(localStorage.getItem('videoIds')) || [];
+      videoList.innerHTML = '';
+      videoIds.forEach(id => {
+        const videoData = JSON.parse(localStorage.getItem(id));
+        if (videoData) {
+          const card = createVideoCard(videoData);
+          videoList.appendChild(card);
+        }
+      });
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const term = input.value.trim();
+      videoList.innerHTML = '';
+      statusMsg.textContent = 'Starting scrape...';
+      localStorage.clear();
+
+      const eventSource = new EventSource(`${API_BASE}/events?search_term=${encodeURIComponent(term)}`);
+      let videoIds = [];
+
+      eventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+
+        if (data.status === 'finished') {
+          statusMsg.textContent = 'Scraping finished!';
+          localStorage.setItem('videoIds', JSON.stringify(videoIds));
+          eventSource.close();
+          return;
+        }
+
+        if (data.error) {
+          statusMsg.textContent = `An error occurred: ${data.error}`;
+          return;
+        }
+
+        if (data.download_url) {
+          const videoId = `video-${data.id}`;
+          localStorage.setItem(videoId, JSON.stringify(data));
+          videoIds.push(videoId);
+          const card = createVideoCard(data);
+          videoList.appendChild(card);
+        }
+      };
+
+      eventSource.onerror = function(err) {
+        console.error("EventSource failed:", err);
+        statusMsg.textContent = "Error connecting to the scraping service. Please try again later.";
+        eventSource.close();
+      };
+        });
+
+    clearButton.addEventListener('click', () => {
+        localStorage.clear();
+        videoList.innerHTML = '';
+        statusMsg.textContent = 'Scraped data cleared.';
+    });
+
+    window.addEventListener('load', loadVideosFromStorage);
+  </script>
+</body>
+</html>
