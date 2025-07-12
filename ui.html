@@ -103,7 +103,8 @@
   </div>
 
   <script>
-    const form = document.getElementById('search-form');  // ✅ This was missing
+    const API_BASE = window.location.origin;
+    const form = document.getElementById('search-form');
     const input = document.getElementById('search-input');
     const videoList = document.getElementById('video-list');
     const statusMsg = document.getElementById('status-msg');
@@ -126,7 +127,9 @@
           <p><strong>Quality:</strong> ${video.quality}</p>
           <p><strong>Views:</strong> ${video.views}</p>
           <p><strong>Uploader:</strong> ${video.uploader}</p>
-          <a href="${downloadHref}" class="download-btn" target="_blank">Download Video</a>
+          <div class="download-btn">
+            <a href="${downloadHref}" target="_blank">Download Video</a>
+          </div>
         </div>
       `;
       return card;
@@ -147,14 +150,21 @@
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const term = input.value.trim();
+      if (!term) return;
+
+      console.log("Submit triggered");
       videoList.innerHTML = '';
       statusMsg.textContent = 'Starting scrape...';
       localStorage.clear();
 
-      const eventSource = new EventSource(`${API_BASE}/events?search_term=${encodeURIComponent(term)}`);
+      const eventSourceURL = `${API_BASE}/events?search_term=${encodeURIComponent(term)}`;
+      console.log("EventSource URL:", eventSourceURL);
+      const eventSource = new EventSource(eventSourceURL);
+
       let videoIds = [];
 
       eventSource.onmessage = function(event) {
+        console.log("Event received:", event.data);
         const data = JSON.parse(event.data);
 
         if (data.status === 'finished') {
@@ -166,6 +176,7 @@
 
         if (data.error) {
           statusMsg.textContent = `An error occurred: ${data.error}`;
+          console.error("Scraper error:", data.error);
           return;
         }
 
@@ -179,16 +190,16 @@
       };
 
       eventSource.onerror = function(err) {
-        console.error("EventSource failed:", err);
+        console.error("EventSource connection failed:", err);
         statusMsg.textContent = "Error connecting to the scraping service. Please try again later.";
         eventSource.close();
       };
-        });
+    });
 
     clearButton.addEventListener('click', () => {
-        localStorage.clear();
-        videoList.innerHTML = '';
-        statusMsg.textContent = 'Scraped data cleared.';
+      localStorage.clear();
+      videoList.innerHTML = '';
+      statusMsg.textContent = 'Scraped data cleared.';
     });
 
     window.addEventListener('load', loadVideosFromStorage);
