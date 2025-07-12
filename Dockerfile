@@ -28,4 +28,4 @@ COPY . .
 EXPOSE 10000
 
 # ✅ Dynamic port bind (REQUIRED for Render)
-CMD ["sh", "-c", "gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:${PORT} --timeout 120"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
